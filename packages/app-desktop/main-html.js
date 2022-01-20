@@ -22,6 +22,7 @@ const Setting = require('@joplin/lib/models/Setting').default;
 const Revision = require('@joplin/lib/models/Revision').default;
 const Logger = require('@joplin/lib/Logger').default;
 const FsDriverNode = require('@joplin/lib/fs-driver-node').default;
+const sharp = require('sharp');
 const shim = require('@joplin/lib/shim').default;
 const { shimInit } = require('@joplin/lib/shim-init-node.js');
 const bridge = require('@electron/remote').require('./bridge').default;
@@ -99,6 +100,7 @@ shimInit({
 	appVersion,
 	electronBridge: bridge(),
 	nodeSqlite,
+	sharp,
 });
 
 // Disable drag and drop of links inside application (which would

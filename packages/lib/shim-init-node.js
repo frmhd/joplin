@@ -156,66 +156,41 @@ function shimInit(options = null) {
 	const handleResizeImage_ = async function(filePath, targetPath, mime, resizeLargeImages) {
 		const maxDim = Resource.IMAGE_MAX_DIMENSION;
 
-		if (shim.isElectron()) {
-			// For Electron
-			const nativeImage = require('electron').nativeImage;
-			let image = nativeImage.createFromPath(filePath);
-			if (image.isEmpty()) throw new Error(`Image is invalid or does not exist: ${filePath}`);
+		const image = sharp(filePath);
+		const md = await image.metadata();
+		let mustResize = md.width > maxDim || md.height > maxDim;
 
-			const size = image.getSize();
-
-			let mustResize = size.width > maxDim || size.height > maxDim;
-
-			if (mustResize && resizeLargeImages === 'ask') {
-				const answer = shim.showMessageBox(_('You are about to attach a large image (%dx%d pixels). Would you like to resize it down to %d pixels before attaching it?', size.width, size.height, maxDim), {
-					buttons: [_('Yes'), _('No'), _('Cancel')],
-				});
-
-				if (answer === 2) return false;
-
-				mustResize = answer === 0;
-			}
-
-			if (!mustResize) {
-				await shim.fsDriver().copy(filePath, targetPath);
-				return true;
-			}
-
-			const options = {};
-			if (size.width > size.height) {
-				options.width = maxDim;
-			} else {
-				options.height = maxDim;
-			}
-
-			image = image.resize(options);
-
-			await shim.writeImageToFile(image, mime, targetPath);
-		} else {
-			// For the CLI tool
-			const image = sharp(filePath);
-			const md = await image.metadata();
-
-			if (md.width <= maxDim && md.height <= maxDim) {
-				shim.fsDriver().copy(filePath, targetPath);
-				return true;
-			}
-
-			return new Promise((resolve, reject) => {
-				image
-					.resize(Resource.IMAGE_MAX_DIMENSION, Resource.IMAGE_MAX_DIMENSION, {
-						fit: 'inside',
-						withoutEnlargement: true,
-					})
-					.toFile(targetPath, (err, info) => {
-						if (err) {
-							reject(err);
-						} else {
-							resolve(info);
-						}
-					});
+		// For Electron
+		if (shim.isElectron() && mustResize && resizeLargeImages === 'ask') {
+			const answer = shim.showMessageBox(_('You are about to attach a large image (%dx%d pixels). Would you like to resize it down to %d pixels before attaching it?', md.width, md.height, maxDim), {
+				buttons: [_('Yes'), _('No'), _('Cancel')],
 			});
+
+			if (answer === 2) return false;
+
+			mustResize = answer === 0;
 		}
+
+		if (!mustResize) {
+			await shim.fsDriver().copy(filePath, targetPath);
+			return true;
+		}
+
+		new Promise((resolve, reject) => {
+			image
+				.resize(Resource.IMAGE_MAX_DIMENSION, Resource.IMAGE_MAX_DIMENSION, {
+					fit: 'inside',
+					withoutEnlargement: true,
+				})
+				.withMetadata()
+				.toFile(targetPath, (err, info) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve(info);
+					}
+				});
+		});
 
 		return true;
 	};
